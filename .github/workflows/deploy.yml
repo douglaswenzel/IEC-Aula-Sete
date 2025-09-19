@@ -2,68 +2,52 @@ name: AulaSete
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
 
 jobs:
   pipeline:
     runs-on: ubuntu-latest
 
-    # Os passos do seu job
     steps:
-      # Passo 1: Faz o checkout do código do repositório
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      # Passo 2: Configura o ambiente Node.js.
-      # É uma boa prática usar esta action para gerenciar as versões do Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18' # Ou a versão que você precisa
+      - name: Dependências
+        run: npm install --force      
 
-      # Passo 3: Instala as dependências do projeto
-      - name: Instalar Dependências
-        run: npm install --force
-
-      # Passo 4: Instala o semver globalmente.
       - name: Semver
-        run: npm install -g semver
+        run: npm install -g semver       
 
-      # Passo 5: Executa o build
       - name: Build
-        run: npm run build # Use 'npm run build' se for um script no package.json
+        run: npm build
 
-      # Passo 6: Executa os testes e a cobertura de código
       - name: Testes
         run: npm test -- --coverage
 
-      # Passo 7: Cria a tag inicial v0.0.0 caso não exista
-      - name: Criar nova tag inicial caso não exista
+      - name: Criar nova tag caso não exista
         env:
-          # É mais seguro usar o GITHUB_TOKEN em vez de um PAT se possível.
-          # O GITHUB_TOKEN é um token automático com permissões para o seu repo.
-          # No entanto, para criar tags e fazer push, você precisará de permissões de 'write'.
-          # Por padrão, o GITHUB_TOKEN já tem essa permissão em repositórios privados.
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           if [ -z "$(git tag)" ]; then
-            git config --global user.name 'github-actions[bot]'
-            git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-            git tag -a v0.0.0 -m "Versao inicial"
+            git config --global user.name 'github-actions'
+            git config --global user.email 'github-actions@github.com'
+            git tag -a v0.0.0 -m "Initial release"
             git push origin v0.0.0
           else
             echo "Tag v0.0.0 já existe - nenhuma ação necessária."
           fi
 
-      # Passo 8: Calcula a nova versão com base nos commits
       - name: Calcular nova versão
         id: version
         shell: bash
         run: |
           set -euo pipefail
+
           git fetch --tags --force --prune
+
+          # 1) Se o HEAD já tem tag semântica, reaproveita (reexecução idempotente)
           EXISTING_TAG=$(git tag --points-at HEAD | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           if [ -n "${EXISTING_TAG:-}" ]; then
             echo "Reexecução detectada: usando tag existente $EXISTING_TAG"
@@ -76,21 +60,32 @@ jobs:
             echo "NEW_VERSION=$VERSION" >> "$GITHUB_ENV"
             exit 0
           fi
+
           echo "Nenhuma tag semântica no HEAD. Calculando nova versão…"
+
+          # 2) Descobrir a última tag semântica (maior)
           LAST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)
           if [ -z "${LAST_TAG:-}" ]; then
             LAST_TAG="v0.0.0"
           fi
           echo "Última tag: $LAST_TAG"
+
           CURRENT_VERSION="${LAST_TAG#v}"
+
+          # 3) Coletar mensagens desde a última tag (ou tudo, se v0.0.0)
           if [ "$LAST_TAG" = "v0.0.0" ]; then
             LOG_RANGE=""
           else
             LOG_RANGE="${LAST_TAG}..HEAD"
           fi
+
+          # Coloca commits em um array, um por linha
           mapfile -t COMMITS < <(git log ${LOG_RANGE} --pretty=format:'%s' || true)
+
           echo "Commits desde ${LAST_TAG}:"
           printf ' - %s\n' "${COMMITS[@]:-<nenhum>}"
+
+          # 4) Detectar nível de bump por convenção de commits
           MAJOR=0; MINOR=0; PATCH=0
           for COMMIT in "${COMMITS[@]:-}"; do
             if [[ "$COMMIT" == *"BREAKING CHANGE"* ]] || [[ "$COMMIT" =~ ^feat!\: ]] || [[ "$COMMIT" =~ \!$ ]]; then
@@ -101,6 +96,8 @@ jobs:
               PATCH=1
             fi
           done
+
+          # 5) Calcular nova versão com semver (default: mantém)
           NEW_VERSION="$CURRENT_VERSION"
           if [[ $MAJOR -eq 1 ]]; then
             NEW_VERSION=$(semver -i major "$CURRENT_VERSION")
@@ -109,7 +106,9 @@ jobs:
           elif [[ $PATCH -eq 1 ]]; then
             NEW_VERSION=$(semver -i patch "$CURRENT_VERSION")
           fi
+
           echo "Versões (atual / nova): $CURRENT_VERSION -> $NEW_VERSION"
+
           if [ "$CURRENT_VERSION" = "$NEW_VERSION" ]; then
             echo "Sem mudanças de versão (sem commits feat/fix/! ou BREAKING CHANGE)."
             {
@@ -126,59 +125,57 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
           fi
-
-      # Passo 9: Atualiza a versão no package.json
+      
       - name: Atualizar versão no package.json
-        if: steps.version.outputs.should_deploy == 'true'
+        if: steps.version.outputs.should_deploy == 'true' && github.ref == 'refs/heads/develop'
         env:
           NEW_VERSION: ${{ steps.version.outputs.new_version }}
         run: |
+          set -euo pipefail
           npm version "${NEW_VERSION}" --no-git-tag-version
-
-      # Passo 10: Commita e faz o push das alterações
+          
       - name: Commit e push package/tag
-        if: steps.version.outputs.should_deploy == 'true'
+        if: steps.version.outputs.should_deploy == 'true' && github.ref == 'refs/heads/develop'
         env:
-          # Use o token padrão do GitHub Actions. Ele tem as permissões necessárias.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         run: |
           set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json
+
+          # Evita falha quando não há mudanças (ex.: step reexecutado)
           git commit -m "chore(release): version ${NEW_VERSION}" || echo "Nada para commitar"
+
+          # Cria tag apenas se ela ainda não existe
           if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
             echo "Tag v${NEW_VERSION} já existe. Pulando criação de tag."
           else
             git tag "v${NEW_VERSION}"
           fi
-          # Esta linha faz o push para a branch 'main'. Certifique-se de que essa é a sua intenção
-          # e que a branch 'develop' tem permissão para fazer push para 'main'.
+
+          # Push do commit para main
           git push origin HEAD:main
+
+          # Push da tag (se existir localmente)
           if git rev-parse "v${NEW_VERSION}" >/dev/null 2>&1; then
             git push origin "v${NEW_VERSION}"
           fi
 
-      # Passo 11: Envio de e-mail EM CASO DE FALHA no pipeline
+      # Envio de e-mail EM CASO DE FALHA no pipeline
       - name: Enviar email se falhar
         if: failure()
-        uses: dawidd6/action-send-mail@v3
-        env:
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          # Certifique-se de que os secrets 'EMAIL_USER' e 'EMAIL_PASSWORD'
-          # estão configurados corretamente no seu repositório.
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USER }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Falha pipeline Actions
-          to: fe.dsm.vot.001@gmail.com
-          body: |
-            A execução falhou.
-            Repositório: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-            Workflow: ${{ github.workflow }}
-            Job: ${{ github.job }}
-            Veja os logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        uses: dawidd6/action-send-mail@v3          
+      # Cadastrar os dados para envio de e-mail e recupera-los aqui 
+      # Ex.: SMTP DO SERVIDOR DE E-MAIL / PORTA / USUARIO / SENHA / EMAIL E API/TOKEN PARA ENVIO DE E-MAIL)
+      # No gmail há uma configuração para geração de secret para envio de e-mails por aplicativos terceiros
+      # E-mail deve ser enviado para: fe.dsm.vot.001@gmail.com
+      # Assunto: Falha pipeline Actions
+      # Conteúdo: 
+          #  A execução falhou.
+          #  Repositório: ${{ github.repository }}
+          #  Commit: ${{ github.sha }}
+          #  Workflow: ${{ github.workflow }}
+          #  Job: ${{ github.job }}
+          #  Veja os logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
