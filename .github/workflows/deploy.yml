@@ -176,7 +176,7 @@ jobs:
           username: ${{ secrets.GMAIL }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
           from: ${{ secrets.GMAIL }}
-          to: douglas.wenzel@hotmai.com
+          to: fe.dsm.vot.001@gmail.com
           subject: Relatório Diário - ${{ github.repository }}
           body: |
             Olá,
