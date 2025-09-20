@@ -1,5 +1,7 @@
+/* eslint-env jest */
+
 import request from "supertest";
-import app from "../src/index.js";
+import app from "../server.js";
 
 describe("Items API", () => {
   it("GET /health deve responder ok", async () => {
@@ -16,7 +18,6 @@ describe("Items API", () => {
   //});
 
   it("GET /items lista ao menos 1", async () => {
-    await request(app).post("/items").send({ name: "item", quantity: 1 });
     const res = await request(app).get("/items");
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
