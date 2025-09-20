@@ -174,12 +174,11 @@ jobs:
           password: ${{ secrets.GMAIL_PASSWORD }}
           from: ${{ secrets.GMAIL }}
           to: douglas.wenzel@hotmai.com
-          subject: ERROR: Pipeline Actions
+          subject: Relatório Diário - ${{ github.repository }}
           body: |
-            A execução falhou.
-            Repositório: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-            Workflow: ${{ github.workflow }}
-            Job: ${{ github.job }}
-            Veja os logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Feito a mão por Douglas Wenzel.
+            Olá,
+            Este é um e-mail automático enviado pelo GitHub Actions.
+            O workflow ${{ github.workflow }} do repositório ${{ github.repository }} foi executado com sucesso.
+            
+            Atenciosamente,
+            GitHub Actions
