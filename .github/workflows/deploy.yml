@@ -173,8 +173,8 @@ jobs:
           username: ${{ secrets.GMAIL }}
           password: ${{ secrets.GMAIL_PASSWORD }}
           from: ${{ secrets.GMAIL }}
-          to: fe.dsm.vot.001@gmail.com
-          subject: 🚨 ERROR: Pipeline Actions
+          to: douglas.wenzel@hotmai.com
+          subject: ERROR: Pipeline Actions
           body: |
             A execução falhou.
             Repositório: ${{ github.repository }}
