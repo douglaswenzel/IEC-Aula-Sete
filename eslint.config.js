@@ -1,31 +1,23 @@
 // eslint.config.js
 // @ts-check
 import js from "@eslint/js";
+import globals from "globals"; // <— adicione isto
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
-  // arquivos/paths a ignorar
-  {
-    ignores: ["node_modules/**", "coverage/**", "dist/**"]
-  },
+  { ignores: ["node_modules/**", "coverage/**", "dist/**"] },
 
-  // regras recomendadas do ESLint
   js.configs.recommended,
 
-  // opções gerais do projeto
   {
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
       globals: {
         // Node
-        process: "readonly",
-        console: "readonly",
-        __dirname: "readonly",
-        module: "readonly",
-        require: "readonly",
-        // Testes
-        jest: "readonly"
+        ...globals.node,
+        // Globais de teste (Jest) — IMPORTANTEEEE
+        ...globals.jest,
       }
     },
     rules: {
@@ -34,9 +26,14 @@ export default [
     }
   },
 
-  // ajustes específicos para testes
+  // Opcional: garantir os globais do Jest apenas nos arquivos de teste
   {
-    files: ["tests/**/*.test.js"],
+    files: ["tests/**/*.test.js", "**/*.test.js", "**/*.spec.js"],
+    languageOptions: {
+      globals: {
+        ...globals.jest
+      }
+    },
     rules: {
       "no-console": "off"
     }
