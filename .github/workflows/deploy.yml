@@ -171,9 +171,10 @@ jobs:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.GMAIL }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          password: ${{ secrets.GMAIL_PASSWORD }}
+          from: ${{ secrets.GMAIL }}
           to: fe.dsm.vot.001@gmail.com
-          subject: Falha pipeline Actions
+          subject: 🚨 ERROR: Pipeline Actions
           body: |
             A execução falhou.
             Repositório: ${{ github.repository }}
@@ -181,3 +182,4 @@ jobs:
             Workflow: ${{ github.workflow }}
             Job: ${{ github.job }}
             Veja os logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Feito a mão por Douglas Wenzel.
